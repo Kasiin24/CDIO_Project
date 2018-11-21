@@ -19,8 +19,8 @@ void setup() {
 
 void loop() {
 
-  //humedad();
-  //salinidad();
+  humedad();
+  salinidad();
   temperatura();
   midePresion(T);
   delay(3000);
