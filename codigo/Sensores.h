@@ -23,6 +23,62 @@ const double frio = 9307 ;
 const double caliente = 16490 ;
 double T;
 
+//--------------------LUZ-------------------
+const double noLuz = 50 ;
+const double siLuz = 29530 ;
+int L;
+
+//------------------GPS---------------------
+#include <TinyGPS++.h>  //Librería del GPS
+#include <SoftwareSerial.h>
+
+#define RX_PIN  12 // GPS RXI
+
+#define TX_PIN  13 // GPS TX0
+#define INIT_PIN 15 // Pin para  Inicializar el GPS
+
+
+#define GPS_BAUD  9600  //  velocidad de comunicación serie
+
+TinyGPSPlus gps; // Definimos el objeto gps
+
+SoftwareSerial ss(RX_PIN,TX_PIN); // Creamos una UART software para comunicación con el GPS
+
+// ---------------------------Funciones auxiliares GPS ---------------------
+
+// Función espera 1s para leer del GPS
+static void smartDelay(unsigned long ms)
+{
+  unsigned long start = millis();
+  do
+  {
+    while(ss.available())
+    {
+      gps.encode(ss.read());  // leemos del gps
+    }
+  } while(millis() - start < ms);
+}
+// Función para encender/apagar mediante un pulso
+void switch_on_off()
+{
+   // Power on pulse
+  digitalWrite(INIT_PIN,LOW);
+  delay(200);
+  digitalWrite(INIT_PIN,HIGH);
+  delay(200);
+  digitalWrite(INIT_PIN,LOW);
+ }
+
+//-----------------------Acelerómetro--------------------------
+#include "Acel.h"
+// Constantes y variables globales
+
+const byte interruptPin = 4;
+// declaramos como volatile la variable que cuenta el nÃºmero de interrupciones
+// si no se hace asÃ­ el compilador podrÃ­a pensar que esta variable no se utiliza nunca y la borrarÃ­a
+volatile byte interruptCounter = 0; // volatile porque puede cambiar en cualquier momento por motivos ajenos al SW
+int numberOfInterrupts = 0;
+
 //==============================CONFIGURACION==============================
 void configuracion() {
   pinMode(salinity_power_pin, OUTPUT); //define el pin 5 como salida de 3.3V
@@ -35,11 +91,21 @@ void configuracion() {
 
     Serial.println("BMP180 init fail\n\n");
     while(1); // Pause forever.
-    
+
   }
 }
-//=========================================================================
+//===============================Config GPS=================================
+void configGPS () {
+Serial.begin(9600); // Inicializar la comunicación con el monitor serie
+ ss.begin(GPS_BAUD); // Inicializar la comunicación con el GPS
 
+ pinMode(INIT_PIN,OUTPUT);
+ switch_on_off(); // Pulso para encender el GPS
+
+ Serial.println("Fecha      Hora       Latitud   Longitud   Alt    Rumbo   Velocidad");
+ Serial.println("(MM/DD/YY) (HH/MM/SS)     (deg)       (deg)  (ft)                   (mph)");
+ Serial.println("-------------------------------------------------------------------------");
+}// ()
 //==============================HUMEDAD==============================
 void humedad(){
 
@@ -123,7 +189,7 @@ void temperatura(){
 
   double adc2 = ads.readADC_SingleEnded(2); //LEER valor del sensor
 
-  
+
 T=(adc2-frio)*(38.6-12.2)/(caliente-frio)+12.2;//map to wapo del doble
 
    //Mostrar valores leidos por sensor
@@ -155,7 +221,7 @@ void midePresion(double &T){
     status = pressure.getPressure(P,T);
     if (status != 0)
     {
-     
+
       // Imprime la medida:
       Serial.print("Presión absoluta: ");
       Serial.print(P,2);
@@ -180,3 +246,69 @@ void midePresion(double &T){
   else Serial.println("Error iniciando las medidas de presión \n");
 }// midePresion()
 //=====================================================================
+void luz(){
+
+
+
+  double adc3 = ads.readADC_SingleEnded(3); //LEER valor del sensor
+
+
+//L=(adc3-noLuz)*(100-0)/(siLuz-noLuz);//map to wapo del doble
+L=map(adc3,noLuz,siLuz,0,100);
+
+   //Mostrar valores leidos por sensor
+ //Serial.print("AIN3: ");
+  //Serial.println(adc3);
+
+
+  //Mostrar valores de salinidad en %
+  Serial.print("Luz (%): ");
+  Serial.print(L);
+  Serial.println("%");
+}
+
+// =============================GPS====================================
+void gepeese() {
+char gpsDate[10];
+  char gpsTime[10];
+
+  if(gps.location.isValid()){ // Si el GPS está recibiendo los mensajes NMEA
+
+    sprintf(gpsDate,"%d/%d/%d", gps.date.month(),gps.date.day(),gps.date.year()); // Construimos string de datos fecha
+    sprintf(gpsTime,"%d/%d/0%d", gps.time.hour(),gps.time.minute(),gps.time.second());  // Construimos string de datos hora
+
+    Serial.print(gpsDate);
+    Serial.print('\t');
+    Serial.print(gpsTime);
+    Serial.print('\t');
+    Serial.print(gps.location.lat(),6);
+    Serial.print('\t');
+    Serial.print(gps.location.lng(),6);
+    Serial.print('\t');
+    Serial.print(gps.altitude.feet());
+    Serial.print('\t');
+    Serial.print(gps.course.deg(),2);
+    Serial.print('\t');
+    Serial.println(gps.speed.mph(),2);
+  }
+  else  // Si no recibe los mensajes
+  {
+
+    Serial.print("Satellites in view: ");
+    Serial.println(gps.satellites.value());
+  }
+  smartDelay(1000);
+}// ()
+
+void acelerea() {
+
+  if(interruptCounter>0){
+
+      interruptCounter--;
+      numberOfInterrupts++;
+
+      Serial.print("InterrupciÃ³n detectada. Total: ");
+      Serial.println(numberOfInterrupts);
+  }
+
+}
